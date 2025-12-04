@@ -2,8 +2,376 @@
 // 🛒 QIANLUNSHOP - CART MODULE (COMPLETE FIXED VERSION)
 // =========================
 
-import { showToast } from "./ui.js";
+import { showToast, updateCartCount } from "./ui.js";
 import { Sanitizer } from "./security.js";
+
+// =========================
+// 🎨 LUXURY CONFIRMATION MODAL
+// =========================
+class LuxuryConfirmModal {
+  constructor() {
+    this.modal = null;
+    this.resolveCallback = null;
+    this.init();
+  }
+
+  init() {
+    this.injectStyles();
+  }
+
+  injectStyles() {
+    if (document.getElementById('luxury-modal-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'luxury-modal-styles';
+    style.textContent = `
+      .luxury-modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        z-index: 10001;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+        padding: 20px;
+      }
+
+      .luxury-modal-overlay.show {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .luxury-modal {
+        background: linear-gradient(135deg,
+          rgba(26, 26, 26, 0.98) 0%,
+          rgba(20, 20, 20, 0.95) 100%);
+        border: 1px solid rgba(212, 175, 55, 0.3);
+        border-radius: 20px;
+        padding: 2.5rem;
+        max-width: 480px;
+        width: 100%;
+        box-shadow:
+          0 20px 60px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(212, 175, 55, 0.2),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        transform: scale(0.9) translateY(20px);
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .luxury-modal-overlay.show .luxury-modal {
+        transform: scale(1) translateY(0);
+      }
+
+      .luxury-modal::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle,
+          rgba(212, 175, 55, 0.1) 0%,
+          transparent 70%);
+        animation: modalGlow 3s ease-in-out infinite;
+      }
+
+      @keyframes modalGlow {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        50% { transform: translate(10px, 10px) scale(1.05); }
+      }
+
+      .luxury-modal-icon {
+        font-size: 4rem;
+        text-align: center;
+        margin-bottom: 1.5rem;
+        filter: drop-shadow(0 4px 12px rgba(212, 175, 55, 0.4));
+        animation: iconBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        position: relative;
+        z-index: 1;
+      }
+
+      @keyframes iconBounce {
+        0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+        50% { transform: scale(1.2) rotate(10deg); }
+        100% { transform: scale(1) rotate(0deg); opacity: 1; }
+      }
+
+      .luxury-modal-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #d4af37;
+        text-align: center;
+        margin-bottom: 1rem;
+        letter-spacing: 0.5px;
+        text-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+        position: relative;
+        z-index: 1;
+      }
+
+      .luxury-modal-message {
+        font-family: 'Inter', sans-serif;
+        font-size: 1.05rem;
+        color: #e8e8e8;
+        text-align: center;
+        line-height: 1.6;
+        margin-bottom: 2rem;
+        opacity: 0.95;
+        position: relative;
+        z-index: 1;
+      }
+
+      .luxury-modal-product {
+        background: rgba(212, 175, 55, 0.08);
+        border: 1px solid rgba(212, 175, 55, 0.2);
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 1.5rem 0;
+        text-align: center;
+        position: relative;
+        z-index: 1;
+      }
+
+      .luxury-modal-product-name {
+        font-weight: 600;
+        color: #f4d03f;
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .luxury-modal-product-price {
+        color: #a0a0a0;
+        font-size: 0.95rem;
+      }
+
+      .luxury-modal-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+        position: relative;
+        z-index: 1;
+      }
+
+      .luxury-modal-btn {
+        flex: 1;
+        padding: 1rem 1.5rem;
+        border: none;
+        border-radius: 12px;
+        font-family: 'Inter', sans-serif;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .luxury-modal-btn::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        transition: width 0.6s, height 0.6s;
+      }
+
+      .luxury-modal-btn:hover::before {
+        width: 300px;
+        height: 300px;
+      }
+
+      .luxury-modal-btn-confirm {
+        background: linear-gradient(135deg, #e74c3c, #c0392b);
+        color: #fff;
+        border: 1px solid rgba(231, 76, 60, 0.5);
+        box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+      }
+
+      .luxury-modal-btn-confirm:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(231, 76, 60, 0.5);
+      }
+
+      .luxury-modal-btn-confirm:active {
+        transform: translateY(0);
+      }
+
+      .luxury-modal-btn-cancel {
+        background: rgba(255, 255, 255, 0.05);
+        color: #e8e8e8;
+        border: 1px solid rgba(212, 175, 55, 0.3);
+      }
+
+      .luxury-modal-btn-cancel:hover {
+        background: rgba(212, 175, 55, 0.15);
+        border-color: #d4af37;
+        transform: translateY(-2px);
+      }
+
+      .luxury-modal-btn-cancel:active {
+        transform: translateY(0);
+      }
+
+      .luxury-modal-close {
+        position: absolute;
+        top: 1.5rem;
+        right: 1.5rem;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(212, 175, 55, 0.3);
+        color: #d4af37;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 1.5rem;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        z-index: 2;
+      }
+
+      .luxury-modal-close:hover {
+        background: rgba(212, 175, 55, 0.2);
+        border-color: #d4af37;
+        transform: rotate(90deg) scale(1.1);
+      }
+
+      @media (max-width: 768px) {
+        .luxury-modal {
+          padding: 2rem;
+          margin: 20px;
+        }
+
+        .luxury-modal-icon {
+          font-size: 3rem;
+        }
+
+        .luxury-modal-title {
+          font-size: 1.5rem;
+        }
+
+        .luxury-modal-message {
+          font-size: 0.95rem;
+        }
+
+        .luxury-modal-actions {
+          flex-direction: column;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  show(options = {}) {
+    return new Promise((resolve) => {
+      this.resolveCallback = resolve;
+
+      const {
+        title = 'Konfirmasi',
+        message = 'Apakah Anda yakin?',
+        productName = '',
+        productPrice = '',
+        icon = '⚠️',
+        confirmText = 'Ya, Hapus',
+        cancelText = 'Batal'
+      } = options;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'luxury-modal-overlay';
+      overlay.id = 'luxuryModalOverlay';
+
+      overlay.innerHTML = `
+        <div class="luxury-modal">
+          <button class="luxury-modal-close" aria-label="Close">×</button>
+          <div class="luxury-modal-icon">${icon}</div>
+          <h2 class="luxury-modal-title">${title}</h2>
+          <p class="luxury-modal-message">${message}</p>
+          ${productName ? `
+            <div class="luxury-modal-product">
+              <div class="luxury-modal-product-name">${productName}</div>
+              ${productPrice ? `<div class="luxury-modal-product-price">${productPrice}</div>` : ''}
+            </div>
+          ` : ''}
+          <div class="luxury-modal-actions">
+            <button class="luxury-modal-btn luxury-modal-btn-cancel" data-action="cancel">
+              ${cancelText}
+            </button>
+            <button class="luxury-modal-btn luxury-modal-btn-confirm" data-action="confirm">
+              ${confirmText}
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+      this.modal = overlay;
+      document.body.style.overflow = 'hidden';
+
+      requestAnimationFrame(() => {
+        overlay.classList.add('show');
+      });
+
+      const closeBtn = overlay.querySelector('.luxury-modal-close');
+      const cancelBtn = overlay.querySelector('[data-action="cancel"]');
+      const confirmBtn = overlay.querySelector('[data-action="confirm"]');
+
+      closeBtn.addEventListener('click', () => this.close(false));
+      cancelBtn.addEventListener('click', () => this.close(false));
+      confirmBtn.addEventListener('click', () => this.close(true));
+
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          this.close(false);
+        }
+      });
+
+      const escHandler = (e) => {
+        if (e.key === 'Escape') {
+          this.close(false);
+          document.removeEventListener('keydown', escHandler);
+        }
+      };
+      document.addEventListener('keydown', escHandler);
+    });
+  }
+
+  close(confirmed) {
+    if (!this.modal) return;
+
+    this.modal.classList.remove('show');
+
+    setTimeout(() => {
+      if (this.modal && this.modal.parentNode) {
+        this.modal.remove();
+      }
+      this.modal = null;
+      document.body.style.overflow = '';
+
+      if (this.resolveCallback) {
+        this.resolveCallback(confirmed);
+        this.resolveCallback = null;
+      }
+    }, 300);
+  }
+}
+
+const confirmModal = new LuxuryConfirmModal();
 
 // =========================
 // 🛒 Cart Class
@@ -264,9 +632,9 @@ export class Cart {
   async remove(id) {
     try {
       await this.acquireLock();
-      
+
       const removedItem = this.items.find(i => i.id === id);
-      
+
       if (!removedItem) {
         console.warn(`⚠️ Item ${id} not found in cart`);
         this.releaseLock();
@@ -274,18 +642,35 @@ export class Cart {
         return false;
       }
 
+      // Show luxury confirmation modal
+      const confirmed = await confirmModal.show({
+        title: 'Hapus Produk?',
+        message: 'Apakah Anda yakin ingin menghapus produk ini dari keranjang?',
+        productName: removedItem.name,
+        productPrice: `Rp ${removedItem.price.toLocaleString('id-ID')}`,
+        icon: '🗑️',
+        confirmText: 'Ya, Hapus',
+        cancelText: 'Batal'
+      });
+
+      if (!confirmed) {
+        console.log('✅ Remove cancelled');
+        this.releaseLock();
+        return false;
+      }
+
       this.items = this.items.filter(i => i.id !== id);
       this.save();
       this.releaseLock();
-      
-      this.emit('item-removed', { 
-        id, 
-        item: removedItem, 
-        cart: this.getSummary() 
+
+      this.emit('item-removed', {
+        id,
+        item: removedItem,
+        cart: this.getSummary()
       });
-      
+
       showToast(`🗑️ "${removedItem.name}" dihapus`, 'success');
-      
+
       return true;
 
     } catch (error) {
@@ -345,23 +730,35 @@ export class Cart {
 
   async clear() {
     try {
+      const confirmed = await confirmModal.show({
+        title: 'Kosongkan Keranjang?',
+        message: 'Semua produk akan dihapus. Tindakan ini tidak dapat dibatalkan.',
+        icon: '🗑️',
+        confirmText: 'Ya, Kosongkan',
+        cancelText: 'Batal'
+      });
+  
+      if (!confirmed) {
+        console.log('✅ Clear cancelled');
+        return false;
+      }
+  
       await this.acquireLock();
-      
       const itemCount = this.items.length;
       this.items = [];
       this.save();
       this.releaseLock();
       
       this.emit('cart-cleared', { itemCount });
-      showToast(`🗑️ ${itemCount} produk dihapus dari keranjang`, 'success');
+      showToast(`✅ ${itemCount} produk berhasil dihapus`, 'success');
       
-      console.log("🗑️ Cart cleared");
+      return true;
       
     } catch (error) {
       console.error("❌ Error clearing cart:", error);
       this.releaseLock();
-      this.emit('error', { type: 'clear-failed', error });
       showToast('❌ Gagal mengosongkan keranjang', 'error');
+      return false;
     }
   }
 
@@ -595,6 +992,7 @@ export function initCartPage() {
       if (item) {
         await cart.update(id, item.quantity + 1);
         updateCartDisplay();
+        updateCartCount(cart);
       }
     }
 
@@ -606,6 +1004,7 @@ export function initCartPage() {
       if (item && item.quantity > 1) {
         await cart.update(id, item.quantity - 1);
         updateCartDisplay();
+        updateCartCount(cart);
       }
     }
 
@@ -613,21 +1012,17 @@ export function initCartPage() {
     if (target.classList.contains('remove-item')) {
       e.preventDefault();
       const id = target.dataset.id;
-      const item = cart.getItem(id);
-      
-      if (item && confirm(`Hapus "${item.name}" dari keranjang?`)) {
-        await cart.remove(id);
-        updateCartDisplay();
-      }
+      await cart.remove(id);
+      updateCartDisplay();
+      updateCartCount(cart);
     }
 
     // Clear cart
     if (target.id === 'clearCart') {
       e.preventDefault();
-      if (confirm('Apakah Anda yakin ingin mengosongkan keranjang?')) {
-        await cart.clear();
-        updateCartDisplay();
-      }
+      await cart.clear();
+      updateCartDisplay();
+      updateCartCount(cart);
     }
 
     // Apply promo
