@@ -96,26 +96,17 @@ export class CheckoutManager {
   updateShippingSelectionOnly(subtotal) {
     const shippingSelect = document.getElementById('shipping');
     if (!shippingSelect) return;
-  
-    const isEligible = Utils.isFreeShippingEligible(subtotal);
-    const currentValue = shippingSelect.value;
 
-    if (isEligible && currentValue !== 'free') {
-      shippingSelect.value = 'free';
-      this.shippingCost = 0;
-    } else if (!isEligible && currentValue === 'free') {
-      shippingSelect.value = 'regular';
-      this.shippingCost = CONFIG.SHIPPING.REGULAR.cost;
-    }
-    this.updateShippingOptions(isEligible);
+    // Always keep current selection, no auto-switching
+    this.updateShippingOptions();
   }
 
   updateShippingOptions(isEligible) {
     const shippingSelect = document.getElementById('shipping');
     if (!shippingSelect) return;
 
-    // Populate shipping options - only show FREE if eligible
-    const shippingOptions = Object.entries(CONFIG.SHIPPING).filter(([key]) => key !== 'FREE' || isEligible);
+    // Populate shipping options - always show all options including FREE
+    const shippingOptions = Object.entries(CONFIG.SHIPPING);
 
     shippingSelect.innerHTML = shippingOptions.map(([key, method]) => `
       <option value="${key.toLowerCase()}">
@@ -134,42 +125,20 @@ export class CheckoutManager {
   }
 
   updateShippingCost(method, preventRecalculation = false) {
-    const subtotal = this.cart.getTotal();
     const shipping = CONFIG.SHIPPING[method.toUpperCase()];
-    
+
     if (!shipping) {
       this.shippingCost = 0;
       return;
     }
-    
+
     let costChanged = false;
     let oldCost = this.shippingCost;
-    
-    // Auto-apply free shipping if eligible
-    if (method === 'free' && subtotal >= CONFIG.FREE_SHIPPING_THRESHOLD) {
-      this.shippingCost = 0;
-      if (oldCost !== 0) {
-        this.showToast('🎉 Gratis ongkir!', 'success');
-        costChanged = true;
-      }
-    } else if (method === 'free' && subtotal < CONFIG.FREE_SHIPPING_THRESHOLD) {
-      // Switch back to regular if no longer eligible
-      const needed = CONFIG.FREE_SHIPPING_THRESHOLD - subtotal;
-      this.shippingCost = CONFIG.SHIPPING.REGULAR.cost;
-      
-      if (oldCost !== this.shippingCost) {
-        this.showToast(`Tambah ${Utils.formatPrice(needed)} untuk gratis ongkir`, 'info');
-        costChanged = true;
-      }
-      
-      const shippingSelect = document.getElementById('shipping');
-      if (shippingSelect && shippingSelect.value !== 'regular') {
-        shippingSelect.value = 'regular';
-      }
-    } else {
-      this.shippingCost = shipping.cost;
-      costChanged = (oldCost !== this.shippingCost);
-    }
+
+    // Always set cost based on shipping method - free shipping is always free
+    this.shippingCost = shipping.cost;
+    costChanged = (oldCost !== this.shippingCost);
+
     if (costChanged && !preventRecalculation) {
       this.calculateTotals();
     }
@@ -181,8 +150,8 @@ export class CheckoutManager {
     if (shippingSelect) {
       const isEligible = Utils.isFreeShippingEligible(this.cart.getTotal());
 
-      // Populate shipping options - only show FREE if eligible
-      const shippingOptions = Object.entries(CONFIG.SHIPPING).filter(([key]) => key !== 'FREE' || isEligible);
+      // Populate shipping options - always show all options including FREE
+      const shippingOptions = Object.entries(CONFIG.SHIPPING);
 
       shippingSelect.innerHTML = shippingOptions.map(([key, method]) => `
         <option value="${key.toLowerCase()}">
