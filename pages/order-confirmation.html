@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Order Confirmation - QianlunShop</title>
+  <title>Konfirmasi Pesanan - QianlunShop</title>
   <link rel="stylesheet" href="../css/main.css">
   <link rel="icon" href="/assets/images/icons/QianLun Alphabet.png" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script type="module" src="../js/script-final.js" defer></script>
 </head>
 <body>
   <nav class="navbar">
     <div class="logo">
-      <a href=../index.html>
+      <a href="../index.html">
         <img src="../assets/images/icons/QianLun Alphabet.png" alt="QianLun Logo" class="logo-img">
       </a>
     </div>
@@ -21,7 +22,7 @@
       <span></span>
       <span></span>
     </button>
-    
+
     <ul>
       <li><a href="../index.html">Beranda</a></li>
       <li><a href="products.html">Produk</a></li>
@@ -35,39 +36,16 @@
     </ul>
   </nav>
 
-  <!-- ✅ ORDER CONFIRMATION -->
-  <section class="section">
+  <!-- Order Confirmation Section -->
+  <section class="section order-confirmation-section">
     <div class="container">
       <div class="order-confirmation">
-        <div class="confirmation-icon">🎉</div>
-        <h2>Pesanan Berhasil!</h2>
-        <p class="order-id">Order ID: <span id="orderId">-</span></p>
-        <p>Terima kasih telah berbelanja di QianlunShop. Pesanan Anda sedang diproses dengan aman.</p>
-        
-        <div class="confirmation-details">
-          <div class="detail-item">
-            <strong>Estimasi Pengiriman:</strong>
-            <span id="deliveryDate">-</span>
-          </div>
-          <div class="detail-item">
-            <strong>Total Pembayaran:</strong>
-            <span id="orderTotal">-</span>
-          </div>
-          <div class="detail-item">
-            <strong>Metode Pengiriman:</strong>
-            <span id="shippingMethod">-</span>
-          </div>
-        </div>
-
-        <div class="confirmation-actions">
-          <a href="../index.html" class="btn btn-primary">🏠 Kembali ke Beranda</a>
-          <a href="products.html" class="btn btn-secondary">🛍️ Lanjutkan Belanja</a>
-        </div>
+        <!-- Content will be populated by JavaScript -->
       </div>
     </div>
   </section>
 
-  <!-- ⚙️ FOOTER -->
+  <!-- Footer -->
   <footer>
     <div class="container">
       <div class="footer-content">
@@ -96,58 +74,5 @@
       </div>
     </div>
   </footer>
-
-  <!-- 🧠 ORDER SCRIPT -->
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      // Ambil orderId dari URL
-      const params = new URLSearchParams(window.location.search);
-      const orderId = params.get("orderId");
-
-      if (!orderId) {
-        document.querySelector(".order-confirmation").innerHTML = `
-          <h2>⚠️ Pesanan Tidak Ditemukan</h2>
-          <p>Sepertinya Anda membuka halaman ini tanpa menyelesaikan transaksi.</p>
-          <a href="products.html" class="btn btn-primary">Belanja Sekarang</a>
-        `;
-        return;
-      }
-
-      // Ambil data order dari localStorage
-      const orders = JSON.parse(localStorage.getItem("qianlunshop_orders")) || [];
-      const order = orders.find(o => o.id === orderId);
-
-      if (order) {
-        document.getElementById("orderId").textContent = order.id;
-        document.getElementById("deliveryDate").textContent = order.shipping.estimatedDelivery;
-        document.getElementById("orderTotal").textContent = new Intl.NumberFormat("id-ID", {
-          style: "currency",
-          currency: "IDR",
-          minimumFractionDigits: 0
-        }).format(order.totals.grandTotal);
-
-        const shippingMethods = {
-          "regular": "Regular Delivery (5 Hari)",
-          "express": "Express Delivery (2 Hari)",
-          "same-day": "Same Day Delivery",
-          "free": "Free Shipping (7-14 Hari)"
-        };
-        document.getElementById("shippingMethod").textContent =
-          shippingMethods[order.shipping.method] || "Standard Shipping";
-      } else {
-        document.querySelector(".order-confirmation").innerHTML = `
-          <h2>❌ Pesanan Tidak Ditemukan</h2>
-          <p>Kami tidak dapat menemukan pesanan dengan ID tersebut.</p>
-          <a href="products.html" class="btn btn-primary">Kembali Belanja</a>
-        `;
-      }
-
-      // Update cart count dari key baru
-      const cartData = JSON.parse(localStorage.getItem("qianlunshop_cart")) || [];
-      const count = cartData.reduce((sum, item) => sum + (item.quantity || 0), 0);
-      const countEl = document.querySelector(".cart-count");
-      if (countEl) countEl.textContent = count;
-    });
-  </script>
 </body>
 </html>

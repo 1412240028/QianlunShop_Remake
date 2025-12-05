@@ -4,7 +4,7 @@
 // =========================
 import { Cart } from "./cart.js";
 import { CONFIG, Utils } from "./config.js";
-import { showToast } from "./ui.js";
+import { showToast, Modal } from "./ui.js";
 
 // =========================
 // 💳 Checkout Manager Class
@@ -28,6 +28,7 @@ export class CheckoutManager {
 
   displayCheckoutItems() {
     const checkoutItems = document.getElementById('checkoutItems');
+    const placeOrderBtn = document.getElementById('placeOrder');
     if (!checkoutItems) return;
 
     const items = this.cart.getItems();
@@ -41,6 +42,15 @@ export class CheckoutManager {
           <a href="products.html" class="btn btn-primary">Belanja Sekarang</a>
         </div>
       `;
+
+      // Disable the place order button if cart is empty
+      if (placeOrderBtn) {
+        placeOrderBtn.disabled = true;
+        placeOrderBtn.textContent = 'Keranjang Kosong';
+        placeOrderBtn.style.opacity = '0.5';
+        placeOrderBtn.style.cursor = 'not-allowed';
+      }
+
       return;
     }
 
@@ -55,6 +65,14 @@ export class CheckoutManager {
         <div class="item-total">${Utils.formatPrice(item.price * item.quantity)}</div>
       </div>
     `).join('');
+
+    // Enable the place order button if cart has items
+    if (placeOrderBtn) {
+      placeOrderBtn.disabled = false;
+      placeOrderBtn.innerHTML = '🛍️ Bayar Sekarang';
+      placeOrderBtn.style.opacity = '';
+      placeOrderBtn.style.cursor = '';
+    }
   }
 
   calculateTotals() {
@@ -354,7 +372,7 @@ export class CheckoutManager {
 
     if (this.discount > 0) {
       this.promoCode = promoCode;
-      this.showToast(CONFIG.MESSAGES.PROMO_APPLIED, 'success');
+      showToast(CONFIG.MESSAGES.PROMO_APPLIED, 'success');
       this.calculateTotals();
 
       // Track analytics
@@ -363,16 +381,27 @@ export class CheckoutManager {
         discount_amount: this.discount
       });
     } else {
-      this.showToast(CONFIG.MESSAGES.PROMO_INVALID, 'error');
+      showToast(CONFIG.MESSAGES.PROMO_INVALID, 'error');
       this.promoCode = '';
       this.discount = 0;
       this.calculateTotals();
     }
   }
 
+  async showOrderConfirmation() {
+    const subtotal = this.cart.getTotal();
+    const discountedSubtotal = subtotal - this.discount;
+    const tax = discountedSubtotal * CONFIG.TAX_RATE;
+    const grandTotal = discountedSubtotal + this.shippingCost + tax;
+
+    const message = `Apakah data pesanan sudah benar?\n\nTotal: ${Utils.formatPrice(grandTotal)}\n\nKlik OK untuk melanjutkan pembayaran.`;
+
+    return await Modal.confirm(message, 'Konfirmasi Pesanan');
+  }
+
   async placeOrder() {
     if (this.cart.getItems().length === 0) {
-      this.showToast('Keranjang belanja kosong', 'error');
+      showToast('Keranjang belanja kosong', 'error');
       return;
     }
 
@@ -387,7 +416,13 @@ export class CheckoutManager {
     });
 
     if (!allValid) {
-      this.showToast(CONFIG.MESSAGES.FORM_INCOMPLETE, 'error');
+      showToast(CONFIG.MESSAGES.FORM_INCOMPLETE, 'error');
+      return;
+    }
+
+    // Show confirmation dialog before proceeding
+    const confirmed = await this.showOrderConfirmation();
+    if (!confirmed) {
       return;
     }
 
@@ -425,8 +460,23 @@ export class CheckoutManager {
       };
 
       this.saveOrder(order);
+
+      // Save order data for confirmation page
+      const orderData = {
+        orderId: order.id,
+        date: new Date().toLocaleDateString('id-ID'),
+        customerEmail: order.customerInfo.email,
+        paymentMethod: order.payment.methodName,
+        shippingAddress: `${order.customerInfo.address}, ${order.customerInfo.city} ${order.customerInfo.postalCode}`,
+        total: order.totals.grandTotal
+      };
+      Utils.saveToStorage('qianlunshop_last_order', orderData);
+
+      // Clear cart after saving order data
       await this.cart.clear();
-      this.showToast(CONFIG.MESSAGES.ORDER_SUCCESS, 'success');
+
+      // Show success notification
+      showToast('🎉 Pembayaran berhasil! Mengalihkan ke konfirmasi pesanan...', 'success');
 
       // Track analytics
       Utils.trackEvent(CONFIG.ANALYTICS_EVENTS.PURCHASE, {
@@ -441,12 +491,14 @@ export class CheckoutManager {
         }))
       });
 
-      // Redirect immediately to order confirmation
-      window.location.href = `order-confirmation.html?orderId=${order.id}`;
+      // Small delay to show the success message before redirect
+      setTimeout(() => {
+        window.location.href = `order-confirmation.html`;
+      }, 1500);
 
     } catch (error) {
       console.error('Order error:', error);
-      this.showToast(CONFIG.MESSAGES.ORDER_FAILED, 'error');
+      showToast(CONFIG.MESSAGES.ORDER_FAILED, 'error');
 
       const placeOrderBtn = document.getElementById('placeOrder');
       if (placeOrderBtn) {
@@ -478,8 +530,20 @@ export class CheckoutManager {
     const shippingSelect = document.getElementById('shipping');
     const method = shippingSelect?.value || 'regular';
 
+    // Map method values to config keys
+    const methodKeyMap = {
+      'regular': 'REGULAR',
+      'express': 'EXPRESS',
+      'same-day': 'SAME_DAY',
+      'free': 'FREE'
+    };
+
+    const configKey = methodKeyMap[method] || method.toUpperCase();
+    const shippingConfig = CONFIG.SHIPPING[configKey];
+
     return {
       method: method,
+      methodName: shippingConfig?.name || method,
       cost: this.shippingCost,
       estimatedDelivery: Utils.getEstimatedDelivery(method)
     };

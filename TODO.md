@@ -5,3 +5,4 @@
 - [x] Add "shipping-select" class to shipping select in checkout.html
 - [x] Add hover styling for shipping select in checkout.css
 - [x] Test the changes
+- [x] Change order confirmation data to use user input instead of example data

@@ -9,7 +9,7 @@ import { initCartPage } from "./cart.js";
 import { initProductFilters, initDiscoverMore, initProductAddToCart } from "./products.js";
 import { initCheckoutPage } from "./checkout.js";
 import { errorHandler } from "./error-handler.js";
-import { apiRateLimiter, userActionLimiter, inputSanitizer } from "./security.js";
+import { apiRateLimiter, userActionLimiter, inputSanitizer, Sanitizer } from "./security.js";
 
 // =========================
 // 🎯 Global Cart Instance
@@ -17,153 +17,81 @@ import { apiRateLimiter, userActionLimiter, inputSanitizer } from "./security.js
 const cart = new Cart();
 
 // =========================
-// 📦 Order Confirmation Page - ENHANCED
+// 📦 Order Confirmation Page
 // =========================
-function initOrderConfirmation() {
-  const confirmationContainer = document.querySelector(".order-confirmation");
-  if (!confirmationContainer) return;
+const getOrderData = () => {
+  const orderData = Utils.loadFromStorage('qianlunshop_last_order', null);
 
-  console.log("📦 Initializing enhanced order confirmation...");
+  if (orderData) {
+    Utils.saveToStorage('qianlunshop_last_order', null); // Clear the data after use
+    return orderData;
+  }
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const orderId = urlParams.get('orderId');
+  return null;
+};
 
-  if (!orderId) {
-    confirmationContainer.innerHTML = Sanitizer.sanitizeHTML(`
-      <div class="empty-cart">
-        <div class="empty-cart-icon">⚠️</div>
-        <h3>Pesanan Tidak Ditemukan</h3>
-        <p>Sepertinya Anda membuka halaman ini tanpa menyelesaikan transaksi.</p>
-        <div class="confirmation-actions">
-          <a href="products.html" class="btn btn-primary">🛍️ Belanja Sekarang</a>
-          <a href="../index.html" class="btn btn-secondary">🏠 Kembali ke Beranda</a>
-        </div>
+const clearCart = () => {
+  localStorage.removeItem(CONFIG.STORAGE_KEYS.CART);
+};
+
+const renderOrderConfirmation = () => {
+  const confirmationContainer = document.querySelector('.order-confirmation');
+
+  const orderDetails = getOrderData();
+
+  if (!orderDetails || !orderDetails.orderId) {
+    confirmationContainer.innerHTML = `
+      <div class="confirmation-icon error-icon" aria-hidden="true">❌</div>
+      <h2>Oops! Data Pesanan Tidak Ditemukan.</h2>
+      <p>Silakan kembali ke halaman produk untuk memulai pembelian.</p>
+      <div class="confirmation-actions">
+        <a href="../index.html" class="btn btn-primary">Kembali ke Beranda</a>
       </div>
-    `);
+    `;
     return;
   }
 
-  const orders = Utils.loadFromStorage(CONFIG.STORAGE_KEYS.ORDERS, []);
-  const order = orders.find(o => o.id === orderId);
+  const confirmationHTML = `
+    <div class="confirmation-icon" aria-hidden="true">✓</div>
+    <h2>Pesanan Anda Telah Berhasil Dikonfirmasi!</h2>
 
-  if (!order) {
-    confirmationContainer.innerHTML = Sanitizer.sanitizeHTML(`
-      <div class="empty-cart">
-        <div class="empty-cart-icon">❌</div>
-        <h3>Data Pesanan Tidak Ditemukan</h3>
-        <p>Kami tidak dapat menemukan pesanan dengan ID tersebut.</p>
-        <div class="confirmation-actions">
-          <a href="checkout.html" class="btn btn-primary">🛒 Kembali ke Checkout</a>
-          <a href="products.html" class="btn btn-secondary">🛍️ Lanjutkan Belanja</a>
-        </div>
-      </div>
-    `);
-    return;
-  }
+    <p class="order-id">
+      **ID Pesanan:** ${orderDetails.orderId}
+    </p>
 
-  // Render complete order confirmation
-  confirmationContainer.innerHTML = `
-    <div class="confirmation-icon">🎉</div>
-    <h2>Pesanan Berhasil!</h2>
-    <p class="order-id">Order ID: <span>${order.id}</span></p>
-    <p class="confirmation-message">Terima kasih telah berbelanja di QianlunShop. Pesanan Anda sedang diproses dengan aman.</p>
+    <p>
+      Terima kasih telah berbelanja di QianlunShop. Kami telah mengirimkan detail pesanan lengkap ke alamat email **${orderDetails.customerEmail}**. Harap tunggu informasi pengiriman.
+    </p>
 
     <div class="confirmation-details">
-      <div class="detail-section">
-        <h4>📦 Detail Pesanan</h4>
-        ${order.items.map(item => `
-          <div class="order-item">
-            <img src="${item.image}" alt="${item.name}" onerror="this.src='../assets/sample1.jpg'">
-            <div class="item-info">
-              <strong>${item.name}</strong>
-              <span>${Utils.formatPrice(item.price)} × ${item.quantity}</span>
-            </div>
-            <div class="item-total">${Utils.formatPrice(item.price * item.quantity)}</div>
-          </div>
-        `).join('')}
+      <div class="detail-item">
+        <strong>Tanggal Pesanan:</strong>
+        <span>${orderDetails.date}</span>
       </div>
-
-      <div class="detail-section">
-        <h4>📋 Ringkasan Pembayaran</h4>
-        <div class="summary-row">
-          <span>Subtotal:</span>
-          <span>${Utils.formatPrice(order.totals.subtotal)}</span>
-        </div>
-        <div class="summary-row">
-          <span>Ongkos Kirim:</span>
-          <span>${Utils.formatPrice(order.totals.shipping)}</span>
-        </div>
-        <div class="summary-row">
-          <span>Pajak (${(CONFIG.TAX_RATE * 100)}%):</span>
-          <span>${Utils.formatPrice(order.totals.tax)}</span>
-        </div>
-        ${order.totals.discount > 0 ? `
-          <div class="summary-row discount">
-            <span>Diskon:</span>
-            <span>- ${Utils.formatPrice(order.totals.discount)}</span>
-          </div>
-        ` : ''}
-        <div class="summary-row grand-total">
-          <span>Total:</span>
-          <span>${Utils.formatPrice(order.totals.grandTotal)}</span>
-        </div>
+      <div class="detail-item">
+        <strong>Metode Pembayaran:</strong>
+        <span>${orderDetails.paymentMethod}</span>
       </div>
-
-      <div class="detail-section">
-        <h4>🚚 Informasi Pengiriman</h4>
-        <div class="detail-item">
-          <strong>Metode:</strong>
-          <span>${order.shipping.methodName || order.shipping.method}</span>
-        </div>
-        <div class="detail-item">
-          <strong>Estimasi Tiba:</strong>
-          <span>${order.shipping.estimatedDelivery}</span>
-        </div>
-        <div class="detail-item">
-          <strong>Alamat:</strong>
-          <span>${order.customerInfo.address}, ${order.customerInfo.city} ${order.customerInfo.postalCode}</span>
-        </div>
+      <div class="detail-item">
+        <strong>Alamat Pengiriman:</strong>
+        <span>${orderDetails.shippingAddress}</span>
       </div>
-
-      <div class="detail-section">
-        <h4>💳 Informasi Pembayaran</h4>
-        <div class="detail-item">
-          <strong>Metode:</strong>
-          <span>${order.payment.methodName || order.payment.method}</span>
-        </div>
-        ${order.payment.cardLastFour ? `
-          <div class="detail-item">
-            <strong>Kartu:</strong>
-            <span>•••• ${order.payment.cardLastFour}</span>
-          </div>
-        ` : ''}
+      <div class="detail-item">
+        <strong>Total Pembayaran:</strong>
+        <span>${Utils.formatPrice(orderDetails.total)}</span>
       </div>
     </div>
 
     <div class="confirmation-actions">
-      <a href="products.html" class="btn btn-primary">🛍️ Lanjutkan Belanja</a>
-      <a href="../index.html" class="btn btn-secondary">🏠 Kembali ke Beranda</a>
-      <button class="btn btn-outline" id="printReceipt">🖨️ Cetak Struk</button>
-    </div>
-
-    <div class="confirmation-security">
-      <p>🔒 Transaksi Anda aman dan terlindungi</p>
-      <small>Jika ada pertanyaan, hubungi customer service kami</small>
+      <a href="../index.html" class="btn btn-primary">Kembali ke Beranda</a>
+      <a href="/tracking?id=${orderDetails.orderId}" class="btn btn-secondary">Lacak Pesanan</a>
     </div>
   `;
 
-  // Print receipt functionality
-  document.getElementById('printReceipt')?.addEventListener('click', () => {
-    window.print();
-  });
+  confirmationContainer.innerHTML = confirmationHTML;
 
-  // Track successful purchase
-  Utils.trackEvent(CONFIG.ANALYTICS_EVENTS.PURCHASE, {
-    transaction_id: order.id,
-    value: order.totals.grandTotal,
-    currency: 'IDR'
-  });
-}
+  clearCart();
+};
 
 // =========================
 // 📱 MOBILE MENU HANDLER
@@ -267,7 +195,11 @@ document.addEventListener("DOMContentLoaded", function () {
   initDiscoverMore();
   initProductAddToCart();
   initCheckoutPage();
-  initOrderConfirmation();
+
+  // Initialize order confirmation only on order-confirmation page
+  if (window.location.pathname.includes('order-confirmation.html')) {
+    renderOrderConfirmation();
+  }
 
   // Listen for cart updates from other tabs
   cart.on('cart-synced', () => {

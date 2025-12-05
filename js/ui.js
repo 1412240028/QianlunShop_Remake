@@ -755,7 +755,7 @@ export const Modal = {
     const modal = document.createElement('div');
     modal.id = modalId;
     modal.className = 'modal';
-    
+
     modal.innerHTML = `
       <div class="modal-content">
         <button class="modal-close" onclick="document.getElementById('${modalId}').remove()">×</button>
@@ -768,10 +768,63 @@ export const Modal = {
     `;
 
     document.body.appendChild(modal);
-    
+
     setTimeout(() => this.show(modalId), 10);
 
     return modalId;
+  },
+
+  /**
+   * Show confirmation modal
+   */
+  confirm(message, title = 'Konfirmasi') {
+    return new Promise((resolve) => {
+      const modalId = 'confirm-modal-' + Date.now();
+      const modal = document.createElement('div');
+      modal.id = modalId;
+      modal.className = 'modal';
+
+      modal.innerHTML = `
+        <div class="modal-content confirm-modal">
+          <div class="modal-header">
+            <h2 class="modal-title">${title}</h2>
+          </div>
+          <div class="modal-body">
+            <p class="confirm-message">${message}</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary cancel-btn">Batal</button>
+            <button class="btn btn-primary confirm-btn">OK</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      const confirmBtn = modal.querySelector('.confirm-btn');
+      const cancelBtn = modal.querySelector('.cancel-btn');
+
+      const closeModal = (result) => {
+        this.hide(modalId);
+        setTimeout(() => {
+          modal.remove();
+          resolve(result);
+        }, 300); // Wait for hide animation
+      };
+
+      confirmBtn.addEventListener('click', () => closeModal(true));
+      cancelBtn.addEventListener('click', () => closeModal(false));
+
+      // Close on backdrop click
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          closeModal(false);
+        }
+      });
+
+      // Show modal
+      setTimeout(() => this.show(modalId), 10);
+    });
   }
 };
 
