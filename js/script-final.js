@@ -23,11 +23,20 @@ const getOrderData = () => {
   const orderData = Utils.loadFromStorage('qianlunshop_last_order', null);
 
   if (orderData) {
-    Utils.saveToStorage('qianlunshop_last_order', null); // Clear the data after use
-    return orderData;
+    // Save to orders history
+    const orders = Utils.loadFromStorage('qianlunshop_orders', []);
+    orders.push({
+      ...orderData,
+      timestamp: Date.now()
+    });
+    Utils.saveToStorage('qianlunshop_orders', orders);
+
+    // JANGAN hapus last_order, set flag "viewed" saja
+    orderData.viewed = true;
+    Utils.saveToStorage('qianlunshop_last_order', orderData);
   }
 
-  return null;
+  return orderData;
 };
 
 const clearCart = () => {
@@ -199,6 +208,11 @@ document.addEventListener("DOMContentLoaded", function () {
   // Initialize order confirmation only on order-confirmation page
   if (window.location.pathname.includes('order-confirmation.html')) {
     renderOrderConfirmation();
+  }
+
+  // Initialize order history only on order-history page
+  if (window.location.pathname.includes('order-history.html')) {
+    renderOrderHistory();
   }
 
   // Listen for cart updates from other tabs

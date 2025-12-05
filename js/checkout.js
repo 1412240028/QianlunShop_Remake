@@ -229,10 +229,21 @@ export class CheckoutManager {
     });
   }
 
+  // ✅ FIX: Improved field validation
   validateField(field) {
     const value = field.value.trim();
     let isValid = true;
     let message = '';
+
+    // ✅ Skip validation jika field hidden
+    const style = window.getComputedStyle(field);
+    const parentStyle = field.parentElement ?
+      window.getComputedStyle(field.parentElement) : null;
+
+    if (style.display === 'none' ||
+        (parentStyle && parentStyle.display === 'none')) {
+      return true; // Field hidden, skip validation
+    }
 
     // Check required first
     if (field.required && !value) {
@@ -275,16 +286,13 @@ export class CheckoutManager {
           message = isValid ? '' : 'CVV harus 3-4 digit';
         } else if (field.id === 'expiryDate') {
           isValid = this.validateExpiryDate(value);
-          message = isValid ? '' : 'Format: MM/YY dan harus di masa depan';
+          message = isValid ? '' : 'Format MM/YY, harus masa depan';
         } else if (field.id === 'fullName') {
           isValid = value.length >= 3;
           message = isValid ? '' : 'Nama minimal 3 karakter';
         } else if (field.id === 'address') {
           isValid = value.length >= 10;
           message = isValid ? '' : 'Alamat minimal 10 karakter';
-        } else if (field.required) {
-          isValid = value.length > 0;
-          message = isValid ? '' : 'Field ini wajib diisi';
         }
         break;
 
@@ -292,12 +300,6 @@ export class CheckoutManager {
         isValid = value !== '' && value !== 'null';
         message = isValid ? '' : 'Silakan pilih salah satu';
         break;
-
-      default:
-        if (field.required) {
-          isValid = value.length > 0;
-          message = isValid ? '' : 'Field ini wajib diisi';
-        }
     }
 
     this.updateFieldError(field, isValid, message);
@@ -399,119 +401,235 @@ export class CheckoutManager {
     return await Modal.confirm(message, 'Konfirmasi Pesanan');
   }
 
-  async placeOrder() {
-    if (this.cart.getItems().length === 0) {
-      showToast('Keranjang belanja kosong', 'error');
-      return;
-    }
+  showPaymentLoading() {
+    const overlay = document.createElement('div');
+    overlay.id = 'payment-loading';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'loading-title');
+    overlay.setAttribute('aria-describedby', 'loading-description');
+    overlay.innerHTML = `
+      <div class="payment-loading-modal">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <h3 id="loading-title">🔄 Memproses Pembayaran</h3>
+        <p id="loading-description">Mohon tunggu, jangan tutup halaman ini...</p>
+        <div class="payment-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Progress pembayaran">
+          <div class="progress-bar"></div>
+        </div>
+      </div>
+    `;
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+    document.body.appendChild(overlay);
 
-    // Validate form
-    const requiredFields = document.querySelectorAll('[required]');
-    let allValid = true;
+    // Announce to screen readers
+    const announcement = document.createElement('div');
+    announcement.setAttribute('aria-live', 'assertive');
+    announcement.setAttribute('aria-atomic', 'true');
+    announcement.className = 'sr-only';
+    announcement.textContent = 'Memproses pembayaran, mohon tunggu sebentar';
+    overlay.appendChild(announcement);
 
-    requiredFields.forEach(field => {
-      if (!this.validateField(field)) {
-        allValid = false;
+    // Animate progress bar
+    const progressBar = overlay.querySelector('.progress-bar');
+    progressBar.style.cssText = `
+      width: 0%;
+      height: 4px;
+      background: linear-gradient(90deg, #007bff, #28a745);
+      border-radius: 2px;
+      transition: width 2s ease-in-out;
+    `;
+
+    setTimeout(() => {
+      progressBar.style.width = '100%';
+    }, 100);
+  }
+
+// =========================
+// 💳 FIXED CHECKOUT - QIANLUNSHOP
+// Bug fix: Validate hanya field yang visible
+// =========================
+
+async placeOrder() {
+  console.log("🛍️ Place Order clicked");
+
+  // Check cart
+  if (this.cart.getItems().length === 0) {
+    showToast('Keranjang belanja kosong', 'error');
+    return;
+  }
+
+  // ✅ FIX: Validate hanya field yang VISIBLE
+  const requiredFields = Array.from(document.querySelectorAll('[required]'));
+
+  // Filter hanya field yang visible
+  const visibleFields = requiredFields.filter(field => {
+    // Check if field atau parent-nya hidden
+    const style = window.getComputedStyle(field);
+    const parentStyle = field.parentElement ?
+      window.getComputedStyle(field.parentElement) : null;
+
+    return style.display !== 'none' &&
+           (!parentStyle || parentStyle.display !== 'none');
+  });
+
+  console.log("📋 Validating fields:", visibleFields.length);
+
+  let allValid = true;
+  let firstInvalidField = null;
+
+  visibleFields.forEach(field => {
+    const isValid = this.validateField(field);
+    if (!isValid) {
+      allValid = false;
+      if (!firstInvalidField) {
+        firstInvalidField = field;
       }
-    });
-
-    if (!allValid) {
-      showToast(CONFIG.MESSAGES.FORM_INCOMPLETE, 'error');
-      return;
     }
+  });
 
-    // Show confirmation dialog before proceeding
+  if (!allValid) {
+    showToast(CONFIG.MESSAGES.FORM_INCOMPLETE, 'error');
+
+    // Focus ke field pertama yang invalid
+    if (firstInvalidField) {
+      firstInvalidField.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+      firstInvalidField.focus();
+    }
+    return;
+  }
+
+  console.log("✅ All fields valid");
+
+  // ✅ FIX: Show confirmation dengan proper error handling
+  try {
     const confirmed = await this.showOrderConfirmation();
+
     if (!confirmed) {
-      return;
+      console.log("❌ User cancelled order");
+      return; // User cancel, nothing to do
+    }
+  } catch (error) {
+    console.error("❌ Confirmation modal error:", error);
+    showToast("Terjadi kesalahan, silakan coba lagi", "error");
+    return;
+  }
+
+  // ✅ FIX: Disable button dengan proper state management
+  const placeOrderBtn = document.getElementById('placeOrder');
+  const originalText = placeOrderBtn ? placeOrderBtn.innerHTML : '';
+
+  try {
+    if (placeOrderBtn) {
+      placeOrderBtn.innerHTML = '⏳ ' + CONFIG.MESSAGES.PAYMENT_PROCESSING;
+      placeOrderBtn.disabled = true;
+      placeOrderBtn.style.cursor = 'not-allowed';
+      placeOrderBtn.style.opacity = '0.6';
     }
 
-    try {
-      const placeOrderBtn = document.getElementById('placeOrder');
-      if (placeOrderBtn) {
-        placeOrderBtn.innerHTML = CONFIG.MESSAGES.PAYMENT_PROCESSING;
-        placeOrderBtn.disabled = true;
-      }
+    console.log("💳 Processing payment...");
+    await this.processPayment();
 
-      await this.processPayment();
+    // Calculate totals
+    const subtotal = this.cart.getTotal();
+    const discountedSubtotal = subtotal - this.discount;
+    const tax = discountedSubtotal * CONFIG.TAX_RATE;
+    const grandTotal = discountedSubtotal + this.shippingCost + tax;
 
-      // Calculate totals with correct discount application (discount applied before tax)
-      const subtotal = this.cart.getTotal();
-      const discountedSubtotal = subtotal - this.discount;
-      const tax = discountedSubtotal * CONFIG.TAX_RATE;
-      const grandTotal = discountedSubtotal + this.shippingCost + tax;
+    const order = {
+      id: Utils.generateId('ORD'),
+      date: new Date().toISOString(),
+      items: this.cart.getItems(),
+      customerInfo: this.getCustomerInfo(),
+      shipping: this.getShippingInfo(),
+      payment: this.getPaymentInfo(),
+      promoCode: this.promoCode,
+      totals: {
+        subtotal: subtotal,
+        shipping: this.shippingCost,
+        tax: tax,
+        discount: this.discount,
+        grandTotal: grandTotal
+      },
+      status: 'completed'
+    };
 
-      const order = {
-        id: Utils.generateId('ORD'),
-        date: new Date().toISOString(),
-        items: this.cart.getItems(),
-        customerInfo: this.getCustomerInfo(),
-        shipping: this.getShippingInfo(),
-        payment: this.getPaymentInfo(),
-        promoCode: this.promoCode,
-        totals: {
-          subtotal: subtotal,
-          shipping: this.shippingCost,
-          tax: tax,
-          discount: this.discount,
-          grandTotal: grandTotal
-        },
-        status: 'completed'
-      };
+    this.saveOrder(order);
 
-      this.saveOrder(order);
+    // ✅ FIX: Clear cart DULU sebelum save order data
+    console.log("🗑️ Clearing cart...");
+    await this.cart.clear();
 
-      // Save order data for confirmation page
-      const orderData = {
-        orderId: order.id,
-        date: new Date().toLocaleDateString('id-ID'),
-        customerEmail: order.customerInfo.email,
-        paymentMethod: order.payment.methodName,
-        shippingAddress: `${order.customerInfo.address}, ${order.customerInfo.city} ${order.customerInfo.postalCode}`,
-        total: order.totals.grandTotal
-      };
-      Utils.saveToStorage('qianlunshop_last_order', orderData);
+    // ✅ Baru save order data untuk confirmation page
+    const orderData = {
+      orderId: order.id,
+      date: new Date().toLocaleDateString('id-ID'),
+      customerEmail: order.customerInfo.email,
+      paymentMethod: order.payment.methodName,
+      shippingAddress: `${order.customerInfo.address}, ${order.customerInfo.city} ${order.customerInfo.postalCode}`,
+      total: order.totals.grandTotal
+    };
 
-      // Clear cart after saving order data
-      await this.cart.clear();
+    console.log("💾 Saving order data:", orderData);
+    Utils.saveToStorage('qianlunshop_last_order', orderData);
 
-      // Show success notification
-      showToast('🎉 Pembayaran berhasil! Mengalihkan ke konfirmasi pesanan...', 'success');
+    // Show success notification
+    showToast('🎉 Pembayaran berhasil! Mengalihkan...', 'success');
 
-      // Track analytics
+    // Track analytics
+    if (typeof Utils !== 'undefined' && Utils.trackEvent) {
       Utils.trackEvent(CONFIG.ANALYTICS_EVENTS.PURCHASE, {
         transaction_id: order.id,
         value: order.totals.grandTotal,
-        currency: 'IDR',
-        items: order.items.map(item => ({
-          item_id: item.id,
-          item_name: item.name,
-          price: item.price,
-          quantity: item.quantity
-        }))
+        currency: 'IDR'
       });
+    }
 
-      // Small delay to show the success message before redirect
-      setTimeout(() => {
-        window.location.href = `order-confirmation.html`;
-      }, 1500);
+    // Redirect dengan delay
+    setTimeout(() => {
+      console.log("🔄 Redirecting to confirmation...");
+      window.location.href = `order-confirmation.html`;
+    }, 1500);
 
-    } catch (error) {
-      console.error('Order error:', error);
-      showToast(CONFIG.MESSAGES.ORDER_FAILED, 'error');
+  } catch (error) {
+    console.error('❌ Order error:', error);
+    showToast(CONFIG.MESSAGES.ORDER_FAILED, 'error');
 
-      const placeOrderBtn = document.getElementById('placeOrder');
-      if (placeOrderBtn) {
-        placeOrderBtn.innerHTML = '🛍️ Bayar Sekarang';
-        placeOrderBtn.disabled = false;
-      }
+    // ✅ FIX: Reset button state jika error
+    if (placeOrderBtn) {
+      placeOrderBtn.innerHTML = originalText || '🛍️ Bayar Sekarang';
+      placeOrderBtn.disabled = false;
+      placeOrderBtn.style.cursor = 'pointer';
+      placeOrderBtn.style.opacity = '1';
     }
   }
+}
 
   async processPayment() {
-    // Simulate payment processing
-    return new Promise((resolve) => {
-      setTimeout(resolve, 2000);
+    return new Promise((resolve, reject) => {
+      // Simulate payment with random failure (5% chance)
+      setTimeout(() => {
+        const success = Math.random() > 0.05;
+
+        if (success) {
+          resolve({ success: true, transactionId: 'TXN-' + Date.now() });
+        } else {
+          reject(new Error('Payment gateway timeout'));
+        }
+      }, 2000);
     });
   }
 
