@@ -9,6 +9,7 @@
 
 /* Utilities */
 @import 'utilities/animations.css';
+@import 'utilities/mobile-responsive.css';
 
 /* Components */
 @import 'components/navbar.css';
