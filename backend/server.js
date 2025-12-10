@@ -22,7 +22,7 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 // ==========================================
 // 🗄️ Database Connection
 // ==========================================
-const connectDB = require('./config/db');
+const { connectDB } = require('./config/db');
 connectDB();
 
 // ==========================================
